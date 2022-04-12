@@ -250,7 +250,7 @@ if __name__ == "__main__":
     
     g_obj = gauss_multiple_full(sigma_x,sigma_y,center_x,center_y,height,n,N,offset)
     
-    plt.imshow(g_obj,vmin=0,vmax=1,cmap='Greys_r')
+    plt.imshow(g_obj,vmin=0,vmax=1)
     plt.colorbar()
     plt.title('obj pattern')
     plt.show() 
