@@ -1,12 +1,12 @@
 """
 Created by Mikhaylov Andrey. 
-Last update 24.01.2022.
+Last update 12.04.2022.
 
 andrey.mikhaylov@kit.edu
 
 """
 
-__version__ = '1.02_24.01.2022'
+__version__ = '1.1_12.04.2022'
 
 
 import numpy as np
@@ -160,4 +160,113 @@ def gauss_multiple_full(sigma_x,sigma_y,center_x,center_y,height,n,N,offset,obsc
     # plt.imshow(gauss_full)
     # plt.colorbar()
     # plt.show()
-    return gauss_full   
+    return gauss_full
+
+
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from skimage.morphology import disk
+    from tifffile import imread, imsave
+    from scipy import constants as const
+    from skimage.transform import rotate
+    from skimage.transform import rescale
+    import os
+    
+
+    
+    
+    n = 16
+    N = 128
+    pix_size = 7.4e-6 #
+    pitch = n*pix_size
+    FoV = pitch*N
+    E = 10007.5039 #energy in ev
+    lambd = const.h * const.c / (E*const.e)
+    beta = 3.70246567E-09
+    delta = 2.66748725E-06
+    mu = 4*const.pi * beta / lambd
+    diameter = 0.999e-3
+    radius_in_pixels = int(diameter/(2*pix_size))
+    rot_angle = 25
+    save = True
+    path_to_save = r'D:\Users\np3733\Documents\Scripts_1\tomography_article\save'
+    
+    print('Amount of lenses per side is {}. Pixel size is {} um. Pitch of the SHSX is {} um. FoV is {} mm per side. Energy of X-rays is {} keV. Material is PMMA. Diameter of the rod is {} mm.'.format(N, pix_size*1e6,pitch*1e6,FoV*1000,E/1000,2))
+    
+    
+    # creating flat gaussian pattern
+    g = gauss_multiple_flat(n,N)
+
+    plt.imshow(g)
+    plt.colorbar()
+    plt.title('flat pattern')
+    plt.show()
+    
+    # creating slice of the 3D object, voxel size == pitch**3 and line projection of the slice
+    slice_3d_object = np.pad(disk(radius_in_pixels),(956, 957), 'constant', constant_values=(0, 0))
+    line_proj = np.sum(slice_3d_object,axis=0)
+    
+    # stacking line projections to create 2d projection and translating values to micrometers. rotation on rot_angle value
+    
+    proj = rotate(np.tile(line_proj,(2048,1)) * pix_size,rot_angle)
+    
+    
+    
+    plt.imshow(proj)
+    plt.colorbar()
+    plt.title('thickness projection')
+    plt.show() 
+    
+
+    #  based on the thickness calculating transmission (T = exp(-mu*d)) and phase (Ф = 2*Pi*Delta*d/lambda)
+    transmission = np.exp(-mu*proj)
+    phase = 2 * const.pi * proj * delta / lambd
+    
+    
+    plt.imshow(transmission)
+    plt.colorbar()
+    plt.title('transmission')
+    plt.show() 
+    
+    plt.imshow(phase)
+    plt.colorbar()
+    plt.title('phase')
+    plt.show() 
+    
+    # taking gradients to create differential phase contrasts
+    dpcx,dpcy = image_derivatives(phase)
+    
+
+    # assuming object without scattering and attenating approx. 50% in the middle, creating corresponding gaussian pattern
+    
+    sigma_x = np.ones((N,N))
+    sigma_y = np.ones((N,N))
+    offset = np.zeros((N,N))
+    
+    height = np.copy(rescale(transmission,0.0625))
+    center_x = rescale(dpcx,0.0625)
+    center_y = rescale(dpcy,0.0625)                
+    
+    g_obj = gauss_multiple_full(sigma_x,sigma_y,center_x,center_y,height,n,N,offset)
+    
+    plt.imshow(g_obj,vmin=0,vmax=1,cmap='Greys_r')
+    plt.colorbar()
+    plt.title('obj pattern')
+    plt.show() 
+    
+    
+    if save:
+        print('Results will be saved to ' + path_to_save)
+        imsave(os.path.join(path_to_save,'transmission.tif'), transmission.astype(np.float32))
+        imsave(os.path.join(path_to_save,'phase.tif'), phase.astype(np.float32))
+        imsave(os.path.join(path_to_save,'proj.tif'), proj.astype(np.float32))
+        imsave(os.path.join(path_to_save,'gauss_ref.tif'), g.astype(np.float32))
+        imsave(os.path.join(path_to_save,'gauss_object.tif'), g_obj.astype(np.float32))
+    else:
+        print('Results will not be saved')
+    
+
+    
+    
+    
